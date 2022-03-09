@@ -13,7 +13,7 @@ use solana_program::{
 entrypoint!(cpi_use);
 
  pub fn cpi_use(
-    _program_id: &Pubkey, 
+    program_id: &Pubkey, 
     account_info: &[AccountInfo], 
     instruction_data: &[u8],
 )-> ProgramResult
@@ -21,31 +21,58 @@ entrypoint!(cpi_use);
     let account_info_iter = &mut account_info.iter();
     let (number, rest) = instruction_data.split_at(8); //number : number of accounts required to operate an instruction
     let number = number.try_into().map(u64::from_le_bytes).or(Err(ProgramError::MissingRequiredSignature))?;
-    let (program, rest) = unpack_pubkey(rest)?;
+    msg!("Extracted number:{}",number);
+    //let (program, rest) = unpack_pubkey(rest)?;
+   // msg!("CPI called Program is :{}",program);
     let mut metas: Vec<AccountMeta> = Vec::with_capacity(std::mem::size_of::<AccountMeta>()*(number as usize));
+  
+    
     let mut i=0; 
     while i < number
     {
-      let account_used = next_account_info(account_info_iter)?; 
-      let tmp_meta: AccountMeta=AccountMeta::new(*account_used.key, account_used.is_signer);
-      metas.push(tmp_meta);
+      let account_used = next_account_info(account_info_iter)?;
+      if account_used.is_writable == true {
+        let tmp_meta: AccountMeta=AccountMeta::new(*account_used.key, account_used.is_signer);
+        metas.push(tmp_meta);
+      } else {
+        let tmp_meta: AccountMeta=AccountMeta::new_readonly(*account_used.key, account_used.is_signer);
+        metas.push(tmp_meta);
+      }
+      
       i=i+1;
+  
     }
+    msg!("Account Metas include: {}",metas.len());
+    let program =next_account_info(account_info_iter)?; 
+    msg!("The called progran is :{}",*program.key);
+    let instruction=instruction::Instruction::new_with_bytes(*program.key,rest,metas);
 
-    let instruction=instruction::Instruction::new_with_bytes(program, rest,metas);
+    // msg!("Metas: {:?}", metas);
+
+    // let instruction=instruction::Instruction::new_with_borsh(*program.key, &rest, metas);
+    msg!("Instruction Called");
+
+    msg!("Rest: {:?}", rest);
+    /*let (_pda, bump_seed) =Pubkey::find_program_address(
+      &[
+          "cpi".as_bytes(),
+      ],
+      program_id,
+  );
+  let signer_seeds: &[&[_]] = &["cpi".as_bytes(),&[bump_seed],];*/
     //cpi is 
-      invoke(
-      &instruction, 
-      account_info)?;
-      msg!("Successfully implemented CPI");
+    invoke(
+    &instruction, 
+    account_info,)?;
+    msg!("Successfully implemented CPI");
         
     Ok(())
 
 }
-pub(crate) fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), ProgramError> {
+/*pub(crate) fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), ProgramError> {
   let pk = input
       .get(..PUBKEY_BYTES)
       .map(Pubkey::new)
       .ok_or(ProgramError::MissingRequiredSignature)?;
   Ok((pk, &input[PUBKEY_BYTES..]))
-}
+}*/
